@@ -1,0 +1,87 @@
+name: sources
+on: [workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Find project (unpacks the zip you uploaded)
+        run: |
+          # The GitHub web uploader does not unpack zips: a zip in the repo is unpacked here.
+          if [ -z "$(find . -name settings.gradle -not -path './.git/*' -not -path './unpacked/*' | head -n1)" ]; then
+            Z=$(find . -iname '*.zip' -not -path './.git/*' | head -n1)
+            if [ -z "$Z" ]; then echo "No settings.gradle and no .zip in the repo"; ls -R | head -50; exit 1; fi
+            echo "unpacking $Z"
+            mkdir -p unpacked && unzip -q -o "$Z" -d unpacked
+          fi
+          F=$(find . -name settings.gradle -not -path './.git/*' | head -n1)
+          if [ -z "$F" ]; then echo "settings.gradle not found"; ls -R | head -50; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$F")" >> $GITHUB_ENV
+          echo "project: $(dirname "$F")"
+      - name: Download ViaFabricPlus 4.4.15 (unmodified, only if not in libs/)
+        run: |
+          cd "$PROJECT_DIR"
+          mkdir -p libs
+          if ls libs/ViaFabricPlus-*.jar >/dev/null 2>&1; then echo "already in zip"; exit 0; fi
+          URL=$(curl -sf 'https://api.modrinth.com/v2/project/viafabricplus/version' -G \
+            --data-urlencode 'loaders=["fabric"]' --data-urlencode 'game_versions=["1.21.11"]' \
+            | jq -r '[.[] | select(.version_number | startswith("4.4.15"))][0].files[] | select(.primary) | .url')
+          curl -sfL "$URL" -o libs/ViaFabricPlus-4.4.15.jar
+      - name: Download YetAnotherConfigLib 3.8.2 (unmodified, only if not in libs/)
+        run: |
+          cd "$PROJECT_DIR"
+          mkdir -p libs
+          if ls libs/YetAnotherConfigLib-*.jar >/dev/null 2>&1; then echo "already in zip"; exit 0; fi
+          URL=$(curl -sf 'https://api.modrinth.com/v2/project/yacl/version' -G \
+            --data-urlencode 'loaders=["fabric"]' --data-urlencode 'game_versions=["1.21.11"]' \
+            | jq -r '[.[] | select(.version_number | startswith("3.8.2"))][0].files[] | select(.primary) | .url')
+          curl -sfL "$URL" -o libs/YetAnotherConfigLib-3.8.2.jar
+      - name: Download e4all (unmodified, optional, only if not in libs/)
+        continue-on-error: true
+        run: |
+          cd "$PROJECT_DIR"
+          mkdir -p libs
+          if ls libs/e4all*.jar libs/e4mc*.jar >/dev/null 2>&1; then echo "already in zip"; exit 0; fi
+          URL=$(curl -sf 'https://api.modrinth.com/v2/project/e4all/version' -G \
+            --data-urlencode 'loaders=["fabric"]' --data-urlencode 'game_versions=["1.21.11"]' \
+            | jq -r '.[0].files[] | select(.primary) | .url')
+          if [ -z "$URL" ]; then echo "e4all not found: the build goes without it (old tunnel is used)"; exit 0; fi
+          curl -sfL "$URL" -o libs/e4all.jar
+          ls -la libs/e4all.jar
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 9.2.0 }
+      - name: Generate Minecraft sources
+        run: cd "$PROJECT_DIR" && gradle genSources --no-daemon
+      - name: Pick the needed classes
+        run: |
+          J=$(find ~/.gradle "$PROJECT_DIR/.gradle" "$PROJECT_DIR/build" -name '*sources.jar' 2>/dev/null | while read f; do if unzip -l "$f" | grep -q 'net/minecraft/client/MinecraftClient.java'; then echo "$f"; fi; done | head -n1)
+          echo "sources jar: $J"
+          mkdir -p src_all out
+          unzip -q -o "$J" -d src_all
+          cd src_all
+          zip -q -r ../out/mc-sources-1.21.11.zip \
+            net/minecraft/client/MinecraftClient.java \
+            net/minecraft/client/network \
+            net/minecraft/client/world/ClientWorld.java \
+            net/minecraft/client/gui/screen/multiplayer \
+            net/minecraft/client/render/WorldRenderer.java \
+            net/minecraft/client/render/GameRenderer.java \
+            net/minecraft/client/render/Camera.java \
+            net/minecraft/client/render/entity/EntityRenderDispatcher.java \
+            net/minecraft/client/render/entity/state \
+            net/minecraft/network/ClientConnection.java \
+            net/minecraft/network/NetworkSide.java \
+            net/minecraft/network/state \
+            net/minecraft/network/listener \
+            net/minecraft/network/handler \
+            net/minecraft/network/encryption \
+            net/minecraft/network/packet/c2s/handshake \
+            net/minecraft/network/packet/c2s/login \
+            net/minecraft/network/packet/s2c/login \
+            net/minecraft/network/packet/s2c/config \
+            net/minecraft/client/network/ClientPlayNetworkHandler.java
+          ls -la ../out
+      - uses: actions/upload-artifact@v4
+        with: { name: mc-sources, path: out/mc-sources-1.21.11.zip }
