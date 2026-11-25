@@ -75,21 +75,36 @@ jobs:
           zip -q -r ../srcout/mc-sources-1.21.11.zip \
             net/minecraft/client/MinecraftClient.java \
             net/minecraft/client/network \
-            net/minecraft/client/world/ClientWorld.java \
+            net/minecraft/client/world \
+            net/minecraft/client/particle \
+            net/minecraft/client/sound \
+            net/minecraft/client/gui/hud \
             net/minecraft/client/gui/screen/multiplayer \
+            net/minecraft/client/gui/screen/ProgressScreen.java \
+            net/minecraft/client/gui/screen/DownloadingTerrainScreen.java \
             net/minecraft/client/render/WorldRenderer.java \
             net/minecraft/client/render/GameRenderer.java \
             net/minecraft/client/render/Camera.java \
+            net/minecraft/client/render/BufferBuilderStorage.java \
+            net/minecraft/client/render/chunk \
             net/minecraft/client/render/entity/EntityRenderDispatcher.java \
+            net/minecraft/client/option/GameOptions.java \
+            net/minecraft/client/util/Window.java \
             net/minecraft/network/ClientConnection.java \
+            net/minecraft/network/NetworkThreadUtils.java \
+            net/minecraft/network/PacketApplyBatcher.java \
             net/minecraft/network/NetworkSide.java \
             net/minecraft/network/state \
             net/minecraft/network/listener \
             net/minecraft/network/handler \
             net/minecraft/network/packet/c2s/handshake \
             net/minecraft/network/packet/c2s/login \
+            net/minecraft/network/packet/c2s/play \
+            net/minecraft/network/packet/c2s/common \
             net/minecraft/network/packet/s2c/login \
-            net/minecraft/network/packet/s2c/config
+            net/minecraft/network/packet/s2c/config \
+            net/minecraft/network/packet/s2c/play \
+            net/minecraft/network/packet/s2c/common || true
           ls -la ../srcout
       - uses: actions/upload-artifact@v4
         if: always()
